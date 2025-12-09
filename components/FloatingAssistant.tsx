@@ -58,8 +58,13 @@ export const FloatingAssistant: React.FC<AssistantPanelProps> = ({ isOpen, onClo
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        const systemInstruction = `You are April, a global voice assistant. The user is Dr. Brank. Understand their commands and use the provided tools. Be concise in your spoken responses. If the user provides an image, acknowledge it and incorporate it into your response.`;
-        setChatInstance(geminiService.createChat(systemInstruction, functionDeclarations));
+        try {
+            const systemInstruction = `You are April, a global voice assistant. The user is Dr. Brank. Understand their commands and use the provided tools. Be concise in your spoken responses. If the user provides an image, acknowledge it and incorporate it into your response.`;
+            setChatInstance(geminiService.createChat(systemInstruction, functionDeclarations));
+        } catch (error) {
+            console.error("Failed to initialize chat assistant (likely missing API Key):", error);
+            setMessages([{ id: 'error', role: 'model', text: 'April is offline. Please check your API Key configuration.' }]);
+        }
     }, []);
 
     useEffect(() => {
@@ -118,7 +123,11 @@ export const FloatingAssistant: React.FC<AssistantPanelProps> = ({ isOpen, onClo
     };
 
     const sendMessage = async () => {
-        if ((!input.trim() && !imageFile) || !chatInstance) return;
+        if (!input.trim() && !imageFile) return;
+        if (!chatInstance) {
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: 'Error: Chat service is not initialized.' }]);
+            return;
+        }
         
         const text = input;
         const currentImageFile = imageFile;
@@ -140,39 +149,52 @@ export const FloatingAssistant: React.FC<AssistantPanelProps> = ({ isOpen, onClo
             requestPayload = { message: text };
         }
         
-        const stream = await chatInstance.sendMessageStream(requestPayload);
-        
-        let responseText = '';
-        let functionCalls: any[] = [];
-        const modelMessageId = (Date.now() + 1).toString();
-        let hasAddedModelMessage = false;
-
-        for await (const chunk of stream) {
-            responseText += chunk.text;
-            if (chunk.functionCalls) functionCalls.push(...chunk.functionCalls);
-
-            if (!hasAddedModelMessage) {
-                setMessages(prev => [...prev, { id: modelMessageId, role: 'model', text: responseText }]);
-                hasAddedModelMessage = true;
-            } else {
-                setMessages(prev => prev.map(m => m.id === modelMessageId ? { ...m, text: responseText } : m));
-            }
-        }
-
-        if (functionCalls.length > 0) {
-            const actionText = functionCalls.map(fc => `Executing: ${fc.name}(${JSON.stringify(fc.args)})`).join('\n');
-            setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: actionText, isAction: true }]);
+        try {
+            const stream = await chatInstance.sendMessageStream(requestPayload);
             
-            const functionResponses = await Promise.all(functionCalls.map(handleFunctionCall));
-            
-            const functionResponseStream = await chatInstance.sendMessageStream({ functionResponses });
-            let finalResponseText = '';
-            for await (const chunk of functionResponseStream) {
-                if (chunk.text) finalResponseText += chunk.text;
+            let responseText = '';
+            let functionCalls: any[] = [];
+            const modelMessageId = (Date.now() + 1).toString();
+            let hasAddedModelMessage = false;
+
+            for await (const chunk of stream) {
+                responseText += chunk.text;
+                if (chunk.functionCalls) functionCalls.push(...chunk.functionCalls);
+
+                if (!hasAddedModelMessage) {
+                    setMessages(prev => [...prev, { id: modelMessageId, role: 'model', text: responseText }]);
+                    hasAddedModelMessage = true;
+                } else {
+                    setMessages(prev => prev.map(m => m.id === modelMessageId ? { ...m, text: responseText } : m));
+                }
             }
-            if(finalResponseText) {
-                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: finalResponseText }]);
+
+            if (functionCalls.length > 0) {
+                const actionText = functionCalls.map(fc => `Executing: ${fc.name}(${JSON.stringify(fc.args)})`).join('\n');
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: actionText, isAction: true }]);
+                
+                const functionResponses = await Promise.all(functionCalls.map(handleFunctionCall));
+                
+                const responseParts = functionResponses.map(resp => ({
+                    functionResponse: {
+                        id: resp.id,
+                        name: resp.name,
+                        response: resp.response
+                    }
+                }));
+
+                const functionResponseStream = await chatInstance.sendMessageStream({ message: responseParts });
+                let finalResponseText = '';
+                for await (const chunk of functionResponseStream) {
+                    if (chunk.text) finalResponseText += chunk.text;
+                }
+                if(finalResponseText) {
+                    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: finalResponseText }]);
+                }
             }
+        } catch (e) {
+            console.error(e);
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: "I'm having trouble connecting to my networks right now." }]);
         }
     };
 

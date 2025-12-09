@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChatMessage, UserProfile, Project } from '../types';
 import * as geminiService from '../services/geminiService';
-import type { LiveServerMessage, LiveSession, FunctionDeclaration, GenerateContentParameters } from "@google/genai";
+import type { LiveServerMessage, FunctionDeclaration } from "@google/genai";
 import { Chat, Type } from "@google/genai";
 
 // --- Utility Functions ---
@@ -134,7 +134,12 @@ const StarshipChat: React.FC<{ profile: UserProfile, projects: Project[] }> = ({
             ${projectSummary}
             When asked to perform an action, use the provided tools. If the user provides an image, you must acknowledge it and incorporate it into your response.`;
 
-            setChatInstance(geminiService.createChat(systemInstruction, functionDeclarations));
+            try {
+                setChatInstance(geminiService.createChat(systemInstruction, functionDeclarations));
+            } catch (error) {
+                console.error("Failed to initialize StarshipChat (likely missing API Key):", error);
+                setMessages(prev => [...prev, { id: 'error-init', role: 'model', text: "Warning: API Key missing or invalid. Chat features may be unavailable." }]);
+            }
         }
     }, [profile, projects]);
 
@@ -188,7 +193,7 @@ const StarshipChat: React.FC<{ profile: UserProfile, projects: Project[] }> = ({
         }
     };
 
-    const handleConversationTurn = async (request: string | GenerateContentParameters) => {
+    const handleConversationTurn = async (request: string | { message: any }) => {
         if (!chatInstance) return;
         
         const stream = await chatInstance.sendMessageStream(
@@ -219,18 +224,25 @@ const StarshipChat: React.FC<{ profile: UserProfile, projects: Project[] }> = ({
             const systemMessage: ChatMessage = { id: Date.now().toString(), role: 'model', text: `*[Simulating Action]*\n> ${functionCallText}` };
             setMessages(prev => [...prev, systemMessage]);
 
-            const functionResponses = functionCalls.map(fc => ({
-                id: fc.id,
-                name: fc.name,
-                response: { result: `Action '${fc.name}' was simulated successfully.` }
+            const functionResponseParts = functionCalls.map(fc => ({
+                functionResponse: {
+                    id: fc.id,
+                    name: fc.name,
+                    response: { result: `Action '${fc.name}' was simulated successfully.` }
+                }
             }));
             
-            await handleConversationTurn({ functionResponses });
+            await handleConversationTurn({ message: functionResponseParts });
         }
     };
     
     const sendMessage = async () => {
         if (!input.trim() && !imageFile) return;
+        if (!chatInstance) {
+            setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: 'Chat unavailable. Please check API Key.' }]);
+            return;
+        }
+
         triggerHapticFeedback();
 
         const userMessage: ChatMessage = { 
@@ -259,7 +271,7 @@ const StarshipChat: React.FC<{ profile: UserProfile, projects: Project[] }> = ({
                 const imagePart = { inlineData: { data: base64, mimeType: currentImageFile.type }};
                 const textPart = { text: currentInput };
                 const parts = [textPart, imagePart];
-                await handleConversationTurn({ contents: { parts } });
+                await handleConversationTurn({ message: parts });
             } else {
                  await handleConversationTurn(currentInput);
             }
@@ -623,7 +635,7 @@ const AudioGalaxy: React.FC = () => {
     const currentUserTranscript = useRef('');
     const currentModelTranscript = useRef('');
     
-    const sessionPromise = useRef<Promise<LiveSession> | null>(null);
+    const sessionPromise = useRef<Promise<any> | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
     const mediaStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);

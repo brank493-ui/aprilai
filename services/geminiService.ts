@@ -2,8 +2,6 @@ import {
     GoogleGenAI,
     Chat,
     GenerateContentResponse,
-    LiveSession,
-    LiveSessionCallbacks,
     Modality,
     Type,
     FunctionDeclaration,
@@ -49,7 +47,9 @@ let aiInstance: GoogleGenAI | null = null;
 
 const getAi = (): GoogleGenAI => {
     if (!aiInstance) {
-        const apiKey = process.env.API_KEY;
+        // Check both standard Vite env (import.meta.env) and process.env
+        const apiKey = (import.meta as any).env?.VITE_API_KEY || process.env.API_KEY;
+        
         if (!apiKey) {
             console.warn("API Key is missing. Some features may not work.");
             // We throw here so the UI can catch it, rather than crashing the whole app on boot
@@ -321,7 +321,8 @@ export const generateVideo = async (prompt: string, image: { base64: string, mim
     }
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (!downloadLink) throw new Error("Video generation failed, no download link found.");
-    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+    const apiKey = (import.meta as any).env?.VITE_API_KEY || process.env.API_KEY;
+    const response = await fetch(`${downloadLink}&key=${apiKey}`);
     const blob = await response.blob();
     return URL.createObjectURL(blob);
 };
@@ -334,7 +335,8 @@ export const analyzeVideo = async (prompt: string): Promise<string> => {
     return response.text;
 };
 
-export const connectLive = (callbacks: LiveSessionCallbacks): Promise<LiveSession> => {
+// Use 'any' for callback type and return type to resolve import errors as LiveSession is not exported
+export const connectLive = (callbacks: any): Promise<any> => {
     return getAi().live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         callbacks: callbacks,
