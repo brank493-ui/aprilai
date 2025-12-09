@@ -43,9 +43,22 @@ export const aprilKnowledge: { [key: string]: string } = {
     'april': 'I am April, your personal astronomy assistant. I am currently operating in offline mode, using my internal knowledge base.',
 };
 
+// --- Lazy Initialization of GoogleGenAI ---
+// Prevents app crash on load if API key is missing
+let aiInstance: GoogleGenAI | null = null;
 
-// The API key is automatically picked up from process.env.API_KEY
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getAi = (): GoogleGenAI => {
+    if (!aiInstance) {
+        const apiKey = process.env.API_KEY;
+        if (!apiKey) {
+            console.warn("API Key is missing. Some features may not work.");
+            // We throw here so the UI can catch it, rather than crashing the whole app on boot
+            throw new Error("API Key is missing. Please check your environment configuration.");
+        }
+        aiInstance = new GoogleGenAI({ apiKey });
+    }
+    return aiInstance;
+};
 
 // --- Utility Functions ---
 
@@ -164,7 +177,7 @@ export const bufferToWave = (abuffer: AudioBuffer): string => {
 // --- Core Gemini Services ---
 
 export const createChat = (systemInstruction: string, tools?: FunctionDeclaration[]): Chat => {
-    return ai.chats.create({
+    return getAi().chats.create({
         model: 'gemini-2.5-flash',
         config: {
             systemInstruction: systemInstruction,
@@ -174,7 +187,7 @@ export const createChat = (systemInstruction: string, tools?: FunctionDeclaratio
 };
 
 export const generateText = async (prompt: string, useGrounding: boolean): Promise<GenerateContentResponse> => {
-    return await ai.models.generateContent({
+    return await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [{ text: prompt }] },
         config: {
@@ -184,7 +197,7 @@ export const generateText = async (prompt: string, useGrounding: boolean): Promi
 };
 
 export const textToSpeech = async (text: string): Promise<AudioBuffer> => {
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text: `Say with a clear and friendly tone: ${text}` }] }],
         config: {
@@ -213,7 +226,7 @@ export const textToSpeech = async (text: string): Promise<AudioBuffer> => {
 
 export const multiSpeakerTextToSpeech = async (script: string): Promise<AudioBuffer> => {
     const prompt = `TTS the following conversation between Host and April:\n\n${script}`;
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text: prompt }] }],
         config: {
@@ -245,7 +258,7 @@ export const multiSpeakerTextToSpeech = async (script: string): Promise<AudioBuf
 };
 
 export const generateImage = async (prompt: string, aspectRatio: string): Promise<string[]> => {
-    const response = await ai.models.generateImages({
+    const response = await getAi().models.generateImages({
         model: 'imagen-4.0-generate-001',
         prompt: prompt,
         config: {
@@ -258,7 +271,7 @@ export const generateImage = async (prompt: string, aspectRatio: string): Promis
 };
 
 export const editImage = async (prompt: string, base64ImageData: string, mimeType: string): Promise<string> => {
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
             parts: [
@@ -278,7 +291,7 @@ export const editImage = async (prompt: string, base64ImageData: string, mimeTyp
 };
 
 export const analyzeImage = async (prompt: string, base64ImageData: string, mimeType: string): Promise<string> => {
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: {
             parts: [
@@ -291,7 +304,7 @@ export const analyzeImage = async (prompt: string, base64ImageData: string, mime
 };
 
 export const generateVideo = async (prompt: string, image: { base64: string, mimeType: string } | null, aspectRatio: '16:9' | '9:16'): Promise<string> => {
-    const videoAi = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const videoAi = getAi(); 
     let operation = await videoAi.models.generateVideos({
         model: 'veo-3.1-fast-generate-preview',
         prompt,
@@ -314,7 +327,7 @@ export const generateVideo = async (prompt: string, image: { base64: string, mim
 };
 
 export const analyzeVideo = async (prompt: string): Promise<string> => {
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: `The user has uploaded a video and asked the following: "${prompt}". Provide a detailed analysis based on this description, assuming you have seen the video.`,
     });
@@ -322,7 +335,7 @@ export const analyzeVideo = async (prompt: string): Promise<string> => {
 };
 
 export const connectLive = (callbacks: LiveSessionCallbacks): Promise<LiveSession> => {
-    return ai.live.connect({
+    return getAi().live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         callbacks: callbacks,
         config: {
@@ -336,7 +349,7 @@ export const connectLive = (callbacks: LiveSessionCallbacks): Promise<LiveSessio
 
 // --- Application-Specific Services ---
 export const generateArticleOutline = async (topic: string): Promise<string> => {
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-pro',
         contents: `Generate a detailed article outline for the topic: "${topic}". The outline should be well-structured with main sections (using Roman numerals) and sub-points (using letters and numbers). It should be suitable for a professional article.`,
     });
@@ -344,7 +357,7 @@ export const generateArticleOutline = async (topic: string): Promise<string> => 
 };
 
 export const generateArticleAbstract = async (topic: string, outline: string): Promise<string> => {
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: `Based on the following topic and outline, write a concise and professional abstract of about 150-200 words.\n\nTopic: ${topic}\n\nOutline:\n${outline}`,
     });
@@ -352,7 +365,7 @@ export const generateArticleAbstract = async (topic: string, outline: string): P
 };
 
 export const generateArticleSection = async (topic: string, outline: string, section: string): Promise<string> => {
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: `You are writing an article on "${topic}" with the overall outline:\n${outline}\n\nNow, write a detailed and engaging content for the following section: "${section}". Ensure it fits coherently within the larger article structure. Use markdown for formatting.`,
     });
@@ -360,7 +373,7 @@ export const generateArticleSection = async (topic: string, outline: string, sec
 };
 
 export const generatePodcastScript = async (theme: string): Promise<string> => {
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: `Write a short, engaging podcast script for an episode about "${theme}". The script should be for two speakers: a friendly Host and an expert, April. Include an intro, a main discussion segment, and an outro. Format the script clearly with speaker names followed by a colon (e.g., Host:).`,
     });
@@ -368,7 +381,7 @@ export const generatePodcastScript = async (theme: string): Promise<string> => {
 };
 
 export const summarizeText = async (notes: string): Promise<string> => {
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: `Summarize the following study notes into key points. Use bullet points for clarity and conciseness:\n\n---\n\n${notes}`,
     });
@@ -382,7 +395,7 @@ export const generateDailyGreeting = async (name: string, isOnline: boolean): Pr
     }
     const prompt = `You are April, a helpful AI assistant. Generate a short, personalized morning greeting for ${name}. Using Google Search, find a significant event, anniversary, or fun fact related to astronomy or physics for today's date, ${new Date().toDateString()}. Keep the greeting under 30 words and sound encouraging.`;
     try {
-        const response = await ai.models.generateContent({
+        const response = await getAi().models.generateContent({
             model: 'gemini-2.5-flash',
             contents: { parts: [{ text: prompt }] },
             config: {
@@ -405,7 +418,7 @@ export const getSpaceNews = async (isOnline: boolean): Promise<any[]> => {
     try {
         const searchPrompt = "Using Google Search, find the top 3 latest and most significant space news articles from major agencies like NASA, ESA, and SpaceX.";
         
-        const searchResponse = await ai.models.generateContent({
+        const searchResponse = await getAi().models.generateContent({
             model: 'gemini-2.5-flash',
             contents: { parts: [{ text: searchPrompt }] },
             config: {
@@ -422,7 +435,7 @@ export const getSpaceNews = async (isOnline: boolean): Promise<any[]> => {
 
         const structurePrompt = `From the following text, extract 3 news articles. Format them as a valid JSON array where each object has keys: "title", "summary", "url", and "thumbnailUrl". Ensure all fields are populated. If a thumbnail URL is not explicitly available in the text for an article, find a suitable, publicly available image URL related to the article's topic (e.g., from a stock photo site or the space agency's media gallery). Text: \n\n${unstructuredText}`;
 
-        const structureResponse = await ai.models.generateContent({
+        const structureResponse = await getAi().models.generateContent({
             model: 'gemini-2.5-flash',
             contents: { parts: [{ text: structurePrompt }] },
             config: {
@@ -459,7 +472,7 @@ export const generateScientistQuote = async (isOnline: boolean): Promise<{ quote
     const prompt = `Provide an inspiring and thought-provoking quote from a famous scientist (like Albert Einstein, Marie Curie, Carl Sagan, Richard Feynman, etc.).`;
     
     try {
-        const response = await ai.models.generateContent({
+        const response = await getAi().models.generateContent({
             model: 'gemini-2.5-flash',
             contents: { parts: [{ text: prompt }] },
             config: {
@@ -490,7 +503,7 @@ export const generatePersonalizedAdvice = async (profile: {name: string, career:
     const prompt = `Based on the profile of ${profile.name}, a ${profile.career} passionate about ${profile.passion}, and considering current online information from Google Search, provide 2-3 actionable and insightful pieces of advice to help them boost their research, studies, and financial abilities. Format the advice in clear, concise sections with markdown. Be encouraging and professional.`;
     
     try {
-        const response = await ai.models.generateContent({
+        const response = await getAi().models.generateContent({
             model: 'gemini-2.5-flash',
             contents: { parts: [{ text: prompt }] },
             config: {
@@ -513,7 +526,7 @@ The code should be well-structured, modern, and functional. If the user mentions
 Description: "${description}"
 
 Generate the code now.`;
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-pro',
         contents: prompt,
     });
@@ -526,7 +539,7 @@ Generate the code now.`;
 
 export const generateCurriculum = async (subject: string, description: string): Promise<any> => {
     const prompt = `Generate a comprehensive, step-by-step learning curriculum for the subject "${subject}". The user describes it as: "${description}". The curriculum should be structured for a beginner-to-pro progression. Organize it into logical modules, and within each module, list specific topics to be covered.`;
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-pro',
         contents: { parts: [{ text: prompt }] },
         config: {
@@ -556,7 +569,7 @@ export const generateCurriculum = async (subject: string, description: string): 
 
 export const generateLessonContent = async (topic: string, subject: string): Promise<string> => {
     const prompt = `Provide a detailed and clear explanation for the topic "${topic}" within the subject of "${subject}". Use markdown for formatting, including headers, lists, and code blocks where appropriate. The explanation should be suitable for someone learning this topic for the first time.`;
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
     });
@@ -565,7 +578,7 @@ export const generateLessonContent = async (topic: string, subject: string): Pro
 
 export const generateQuiz = async (topic: string, subject: string): Promise<any[]> => {
     const prompt = `Create a multiple-choice quiz with 5 questions about the topic "${topic}" in the subject of "${subject}". For each question, provide 4 options and indicate the correct answer.`;
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [{ text: prompt }] },
         config: {
@@ -589,7 +602,7 @@ export const generateQuiz = async (topic: string, subject: string): Promise<any[
 
 export const generateFlashcards = async (topic: string, subject: string): Promise<any[]> => {
     const prompt = `Generate a set of 5 flashcards for the topic "${topic}" in the subject of "${subject}". Each flashcard should have a "front" (a question or term) and a "back" (the answer or definition).`;
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [{ text: prompt }] },
         config: {
@@ -612,7 +625,7 @@ export const generateFlashcards = async (topic: string, subject: string): Promis
 
 export const evaluatePythonCode = async (code: string): Promise<string> => {
     const prompt = `Analyze the following Python code. Provide feedback on its correctness, efficiency, and style. If there are errors, explain them and suggest a correction. If it's correct, explain what it does and suggest potential improvements or alternative approaches.\n\n---\n\n${code}`;
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-pro',
         contents: prompt,
     });
@@ -621,7 +634,7 @@ export const evaluatePythonCode = async (code: string): Promise<string> => {
 
 export const generateQuizFromNotes = async (notes: string): Promise<any[]> => {
     const prompt = `Based on the following study notes, create a multiple-choice quiz with 5 questions to test understanding. For each question, provide 4 options and indicate the correct answer.\n\nNotes:\n---\n${notes}`;
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [{ text: prompt }] },
         config: {
@@ -645,7 +658,7 @@ export const generateQuizFromNotes = async (notes: string): Promise<any[]> => {
 
 export const generateFlashcardsFromNotes = async (notes: string): Promise<any[]> => {
     const prompt = `Generate a set of 5 flashcards from the following study notes. Each flashcard should have a "front" (a key term or question) and a "back" (the definition or answer).\n\nNotes:\n---\n${notes}`;
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: { parts: [{ text: prompt }] },
         config: {
@@ -668,7 +681,7 @@ export const generateFlashcardsFromNotes = async (notes: string): Promise<any[]>
 
 export const generateExerciseFromNotes = async (notes: string): Promise<string> => {
     const prompt = `Create a short, practical exercise based on the following study notes to help solidify understanding. The exercise should be a problem to solve or a concept to apply. Provide the exercise prompt clearly, using markdown for formatting.\n\nNotes:\n---\n${notes}`;
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
     });
@@ -677,7 +690,7 @@ export const generateExerciseFromNotes = async (notes: string): Promise<string> 
 
 export const generatePodcastScriptFromNotes = async (notes: string): Promise<string> => {
     const prompt = `Based on the following study notes, write a short, engaging podcast script for an episode explaining these concepts. The script should be for two speakers: a friendly Host and an expert, April. Include an intro, a main discussion segment, and an outro. Format the script clearly with speaker names followed by a colon (e.g., Host:).\n\nNotes:\n---\n${notes}`;
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
     });
