@@ -1,0 +1,17 @@
+{
+  "short_name": "April",
+  "name": "April: Your Astronomy Assistant",
+  "description": "An advanced AI assistant powered by Gemini. Explore the cosmos with chat, generate stunning space visuals, analyze celestial data, and have real-time conversations about the universe.",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0c0a1a",
+  "background_color": "#0c0a1a"
+}

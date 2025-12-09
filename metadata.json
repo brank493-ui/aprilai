@@ -1,0 +1,9 @@
+{
+  "name": "April: Your Astronomy Assistant",
+  "description": "An advanced AI assistant powered by Gemini. Explore the cosmos with chat, generate stunning space visuals, analyze celestial data, and have real-time conversations about the universe.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera",
+    "bluetooth"
+  ]
+}
