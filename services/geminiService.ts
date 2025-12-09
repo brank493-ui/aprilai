@@ -48,7 +48,7 @@ let aiInstance: GoogleGenAI | null = null;
 const getAi = (): GoogleGenAI => {
     if (!aiInstance) {
         // Check both standard Vite env (import.meta.env) and process.env
-        const apiKey = (import.meta as any).env?.VITE_API_KEY || process.env.API_KEY;
+        const apiKey = "AIzaSyA4go0iOeeZZVqylXQaGTDI6F-_OlQsykY";
         
         if (!apiKey) {
             console.warn("API Key is missing. Some features may not work.");
